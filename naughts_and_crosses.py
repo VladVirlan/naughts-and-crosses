@@ -1,6 +1,7 @@
 # naughts_and_crosses.py
 
 import random
+import os
 
 # ---------- UI / I/O ----------
 
@@ -16,11 +17,13 @@ def input_location(board, player_symbol, N):
             continue
         return loc
 
-def print_board(board, N):
+def print_board(board, N, highlight=None, last_move=None):
     symbols = {0: "O", 1: "X", "$": " "}
     for i in range(N):
-        row = "|".join(symbols[board[i*N + j]] for j in range(N))
-        print(row)
+        print("|".join(f"\033[92m{symbols[board[i*N+j]]}\033[0m" if highlight and i*N+j in highlight else f"\033[91m{symbols[board[i*N+j]]}\033[0m" if last_move is not None and i*N+j == last_move else symbols[board[i*N+j]] for j in range(N)))
+
+def clear_console():
+    os.system("cls" if os.name == "nt" else "clear")
 
 # ---------- Bitwise Helpers ----------
         
@@ -60,6 +63,8 @@ def check_winner(player_bitboard, winning_masks):
 
 def legal_moves(board):
     return [i for i, v in enumerate(board) if v == "$"]
+
+winning_cells = lambda board, pb, masks: next(([i for i in range(len(board)) if (m >> i) & 1] for m in masks if pb & m == m), [])
 
 # ---------- Heuristic Evaluation (for N >= 4) ----------
 
@@ -164,13 +169,11 @@ def cpu_move_hard(board, N, cpu_id, player_bitboards, winning_masks):
 
 def main():
     N = int(next(n for n in iter(lambda: input("Enter board size N (e.g., 3 for 3x3): ").strip(), None) if n.isdigit() and int(n) > 0))
-    
     vs_cpu = next(m for m in iter(lambda: input("Play vs CPU? (y/n): ").strip().lower(), None) if m in ("y","n")) == "y"
 
     human_is = 0
     if vs_cpu:
         human_is = 0 if next(s for s in iter(lambda: input("Do you want to be O or X? (O goes first) [O/X]: ").strip().lower(), None) if s in ("o","x")) == "o" else 1
-
         cpu_difficulty = next(d for d in iter(lambda: input("CPU difficulty [easy/hard] (default hard): ").strip().lower() or "hard", None) if d in ("easy","hard"))
 
     board = ["$"] * (N ** 2)
@@ -179,8 +182,11 @@ def main():
     player_bitboards = [0, 0]
     winning_masks = generate_winning_masks(N)
 
+    last_move = None
     while True:
-        print_board(board, N)
+        clear_console()
+        highlight = winning_cells(board, player_bitboards[player], winning_masks)
+        print_board(board, N, highlight if highlight else None, last_move=last_move)
 
         if vs_cpu and player != human_is:
             if cpu_difficulty == "easy":
@@ -193,9 +199,12 @@ def main():
         
         board[mv] = player
         player_bitboards[player] |= 1 << mv
+        last_move = mv
         
         if check_winner(player_bitboards[player], winning_masks):
-            print_board(board, N)
+            clear_console()
+            highlight = winning_cells(board, player_bitboards[player], winning_masks)
+            print_board(board, N, highlight if highlight else None)
             if not vs_cpu or player == human_is:
                 print(f"Congratulations, Player {player + 1} ({symbols[player]}), you won!")
             else:
@@ -203,6 +212,7 @@ def main():
             break
         
         if "$" not in board:
+            clear_console()
             print_board(board, N)
             print("It's a draw!")
             break
